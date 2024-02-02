@@ -1,0 +1,2 @@
+class ActorNotFound(Exception):
+    pass
