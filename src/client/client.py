@@ -34,13 +34,23 @@ def make_keys(
 def register(
         username: str,
         instance_url: str,
-        public_key_path: str,
+        public_key_path: str = None,
+        public_key_pem: str = None,
 ):
-    with open(public_key_path) as fp:
-        public_key = fp.read()
-    requests.post(f"{instance_url}/users/{username}", params={
-        "public_key_pem": public_key
+    if not ((public_key_pem is None) ^ (public_key_path is None)):
+        raise RuntimeError
+    if public_key_path is not None:
+        with open(public_key_path) as fp:
+            public_key = fp.read()
+    else:
+        public_key = public_key_pem
+    response = requests.post(f"{instance_url}/users/{username}", params={
+        "public_key": public_key
     })
+    if response.status_code // 100 != 2:
+        raise RuntimeError(response.text)
+    else:
+        return response.json()
 
 
 def post_activity(

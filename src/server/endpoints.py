@@ -86,27 +86,27 @@ def get_user(user: str):
 
 
 @endpoint('/users/<user>', methods=("POST",))
-def register_user(user: str, new_public_key_pem: str):
+def register_user(user: str, public_key: str):
     new_public_key = {
         "id": f"{Environ.URL}/users/{user}/public_key",
         "owner": f"{Environ.URL}/users/{user}",
-        "publicKeyPem": new_public_key_pem
+        "publicKeyPem": public_key
     }
     lock.acquire()
     try:
         old_public_key = public_keys[user]
     except NameError:
         public_keys[user] = new_public_key
-        return {}
+        return True
     else:
         old_public_key_pem = old_public_key.get("publicKeyPem", None)
         if old_public_key_pem is None:
             public_keys[user] = new_public_key
-            return {}
-        elif old_public_key_pem != new_public_key_pem:
+            return True
+        elif old_public_key_pem != public_key:
             return "User Already Exists", 409
         else:
-            return {}
+            return True
     finally:
         lock.release()
 

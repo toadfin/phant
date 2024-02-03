@@ -1,4 +1,5 @@
 import inspect
+import json
 import logging
 from collections.abc import Callable
 from uuid import uuid4
@@ -18,7 +19,10 @@ def endpoint(url: str, methods: tuple[str, ...] = ("GET",)):
                     return f"Missing parameter '{name}'.", 422
                 elif not isinstance(kwargs[name], param.annotation):
                     return f"Parameter '{name}' should be of type {param.annotation}.", 422
-            return callback(**kwargs)
+            response = callback(**kwargs)
+            if isinstance(response, bool):
+                response = json.dumps(response)
+            return response
 
         parameters = inspect.signature(callback).parameters
         endpoints.append((url, methods, wrapper))
