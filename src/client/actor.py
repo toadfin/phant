@@ -2,8 +2,6 @@ from urllib.parse import urlparse
 
 import requests
 
-from .exceptions import ActorNotFound
-
 
 class Actor:
     @classmethod
@@ -23,10 +21,10 @@ class Actor:
         else:
             actor_url = None
         if actor_url is None:
-            raise ActorNotFound(username)
+            raise FileNotFoundError(username)
         response = requests.get(actor_url, headers={"Accept": "application/activity+json"})
         if response.status_code // 100 != 2:
-            raise ActorNotFound(response)
+            raise FileNotFoundError(response)
         return Actor(**response.json())
 
     @classmethod

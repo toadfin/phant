@@ -29,7 +29,7 @@ def webfinger(resource: str):
     lock.acquire()
     try:
         _ = public_keys[user]
-    except NameError:
+    except KeyError:
         return {}
     finally:
         lock.release()
@@ -50,7 +50,7 @@ def get_user(user: str):
     lock.acquire()
     try:
         public_key = public_keys[user]
-    except NameError:
+    except KeyError:
         return "User Not Found", 404
     finally:
         lock.release()
@@ -95,7 +95,7 @@ def register_user(user: str, public_key: str):
     lock.acquire()
     try:
         old_public_key = public_keys[user]
-    except NameError:
+    except KeyError:
         public_keys[user] = new_public_key
         return True
     else:
@@ -116,7 +116,7 @@ def get_user_public_key(user: str):
     lock.acquire()
     try:
         public_key = public_keys[user]
-    except NameError:
+    except KeyError:
         return "Public key not found", 404
     else:
         return public_key
