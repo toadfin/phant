@@ -25,6 +25,8 @@ class Actor:
         if actor_url is None:
             raise ActorNotFound(username)
         response = requests.get(actor_url, headers={"Accept": "application/activity+json"})
+        if response.status_code // 100 != 2:
+            raise ActorNotFound(response)
         return Actor(**response.json())
 
     @classmethod
@@ -51,4 +53,4 @@ class Actor:
         self.public_key_id = (publicKey or {}).get("id", None)
 
     def get_private_key(self):
-        return requests.get(self.public_key_id).text
+        return requests.get(self.public_key_id).json()

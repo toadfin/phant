@@ -39,7 +39,7 @@ def register(
     with open(public_key_path) as fp:
         public_key = fp.read()
     requests.post(f"{instance_url}/users/{username}", params={
-        "public_key": public_key
+        "public_key_pem": public_key
     })
 
 
