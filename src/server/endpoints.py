@@ -7,11 +7,7 @@ from environ import Environ
 from .utils import endpoint
 
 if Environ.DEBUG:
-    public_keys = defaultdict(lambda: {
-        "id": "DEBUG_PUBLIC_KEY_ID",
-        "owner": "DEBUG_PUBLIC_KEY_OWNER",
-        "publicKeyPem": "DEBUG_PUBLIC_KEY_PEM"
-    })
+    public_keys = defaultdict(lambda: "DEBUG_PUBLIC_KEY_PEM")
 else:
     public_keys = {}
 lock = Lock()
@@ -49,14 +45,11 @@ def webfinger(resource: str):
 def get_user(user: str):
     lock.acquire()
     try:
-        public_key = public_keys[user]
+        public_key_pem = public_keys[user]
     except KeyError:
         return "User Not Found", 404
     finally:
         lock.release()
-    public_key_pem = public_key.get("publicKeyPem", None)
-    if public_key_pem is None:
-        return "User Error", 500
     inbox = f"{Environ.URL}/users/{user}/inbox"
     accept_parts = request.headers.get("Accept", "").split(";")
     if len(accept_parts) > 0:
@@ -74,7 +67,7 @@ def get_user(user: str):
             "preferredUsername": user,
             "inbox": inbox,
             "publicKey": {
-                "id": f"{Environ.URL}/users/{user}/public_key",
+                "id": f"{Environ.URL}/users/{user}",
                 "owner": f"{Environ.URL}/users/{user}",
                 "publicKeyPem": public_key_pem
             }
@@ -87,38 +80,19 @@ def get_user(user: str):
 
 @endpoint('/users/<user>', methods=("POST",))
 def register_user(user: str, public_key: str):
-    new_public_key = {
-        "id": f"{Environ.URL}/users/{user}/public_key",
-        "owner": f"{Environ.URL}/users/{user}",
-        "publicKeyPem": public_key
-    }
     lock.acquire()
     try:
-        old_public_key = public_keys[user]
+        old_public_key_pem = public_keys[user]
     except KeyError:
-        public_keys[user] = new_public_key
+        public_keys[user] = public_key
         return True
     else:
-        old_public_key_pem = old_public_key.get("publicKeyPem", None)
         if old_public_key_pem is None:
-            public_keys[user] = new_public_key
+            public_keys[user] = public_key
             return True
         elif old_public_key_pem != public_key:
             return "User Already Exists", 409
         else:
             return True
-    finally:
-        lock.release()
-
-
-@endpoint('/users/<user>/public_key')
-def get_user_public_key(user: str):
-    lock.acquire()
-    try:
-        public_key = public_keys[user]
-    except KeyError:
-        return "Public key not found", 404
-    else:
-        return public_key
     finally:
         lock.release()
