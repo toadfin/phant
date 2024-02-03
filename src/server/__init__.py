@@ -1,2 +1,2 @@
-from .endpoint import wrap_app
-from .webfinger import *
+from .utils import wrap_app
+from .endpoints import *
