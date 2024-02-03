@@ -50,7 +50,7 @@ def get_user(user: str):
         return "User Not Found", 404
     finally:
         lock.release()
-    inbox = f"{Environ.URL}/users/{user}/inbox"
+    inbox = f"{Environ.URL}/inbox"
     accept_parts = request.headers.get("Accept", "").split(";")
     if len(accept_parts) > 0:
         return_json = "application/activity+json" in accept_parts[0].split(",")
@@ -96,3 +96,10 @@ def register_user(user: str, public_key: str):
             return True
     finally:
         lock.release()
+
+
+"""
+@endpoint("/inbox", methods=("POST",))
+def inbox_receive():
+    pass
+"""

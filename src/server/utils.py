@@ -40,6 +40,8 @@ def wrap_app(app: Flask):
     @app.route('/<path:path>', methods=["GET", "POST"])
     def root(path: str):
         logger.info("NOT IMPLEMENTED - "
+                    f"METHOD: - {request.method}"
                     f"PATH: {path} - "
-                    f"PARAMS: {dict(request.values)}")
+                    f"PARAMS: {dict(request.values)}"
+                    f"BODY: {request.json}")
         return ""

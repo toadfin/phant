@@ -1,3 +1,4 @@
+from typing import overload
 from urllib.parse import urlparse
 
 import requests
@@ -5,14 +6,37 @@ import requests
 
 class Actor:
     @classmethod
+    @overload
+    def webfinger(cls, full_username: str):
+        ...
+
+    @classmethod
+    @overload
+    def webfinger(cls, username: str, instance: str):
+        ...
+
+
+    @classmethod
     def webfinger(
             cls,
             username: str,
-            instance_url: str
+            instance: str = None
     ):
-        hostname = urlparse(instance_url).hostname
+        if instance is None:
+            parts = username.split("@")
+            if len(parts) == 2:
+                username = parts[0]
+                instance = parts[1]
+            elif len(parts) == 3:
+                username = parts[1]
+                instance = parts[2]
+            else:
+                raise ValueError(username)
+        instance_url = urlparse(instance)
+        scheme = instance_url.scheme or "https"
+        hostname = instance_url.hostname or instance
         response = requests.get(
-            f"{instance_url}/.well-known/webfinger",
+            f"{scheme}://{hostname}/.well-known/webfinger",
             params={"resource": f"acct:{username}@{hostname}"}
         )
         for link in response.json().get("links", ()):
@@ -57,6 +81,7 @@ class Actor:
         publicKey = publicKey or {}
         self.username = username
         self.instance = instance
+        self.full_username = f"@{username}@{instance}"
         self.id = id
         self.inbox = inbox
         self.public_key_id = publicKey.get("id")

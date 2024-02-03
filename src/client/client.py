@@ -58,8 +58,8 @@ def post_activity(
         sender: Actor,
         recipient: Actor,
         private_key_path: str,
-        date: datetime.datetime = None
-) -> dict[str, Any]:
+        date: datetime.datetime,
+):
     with open(private_key_path) as fp:
         private_key = RSA.import_key(fp.read())
     content = json.dumps(activity)
@@ -67,11 +67,11 @@ def post_activity(
     hasher.update(content.encode("ascii"))
     digest = "sha-256=" + base64.b64encode(hasher.digest()).decode("ascii")
     inbox = urlparse(recipient.inbox)
-    date = (date or datetime.datetime.now()).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    date_str = date.strftime("%a, %d %b %Y %H:%M:%S GMT")
     signed_string = f"(request-target): post {inbox.path}\n" \
                     f"digest: {digest}\n" \
                     f"host: {inbox.hostname}\n" \
-                    f"date: {date}"
+                    f"date: {date_str}"
     signer = Crypto.Signature.pkcs1_15.new(private_key)
     hasher = Crypto.Hash.SHA256.new()
     hasher.update(signed_string.encode())
@@ -82,24 +82,39 @@ def post_activity(
     return requests.post(recipient.inbox, data=content, headers={
         'Digest': digest,
         'Host': inbox.hostname,
-        'Date': date,
+        'Date': date_str,
         'Signature': signature_header
-    }).json()
+    })
 
 
-def post_create_activity(
+def post_activity_create(
         object_activity: dict[str, Any],
         sender: Actor,
         recipient: Actor,
         private_key_path: str,
         date: datetime.datetime = None
-) -> dict[str, Any]:
+):
+    date = date or datetime.datetime.now()
     return post_activity(
         activity={
-            "@context": "https://www.w3.org/ns/activitystreams",
+            "@context": [
+                "https://www.w3.org/ns/activitystreams",
+                {
+                    "ostatus": "http://ostatus.org#",
+                    "atomUri": "ostatus:atomUri",
+                    "inReplyToAtomUri": "ostatus:inReplyToAtomUri",
+                    "conversation": "ostatus:conversation",
+                    "sensitive": "as:sensitive",
+                    "toot": "http://joinmastodon.org/ns#",
+                    "votersCount": "toot:votersCount"
+                }
+            ],
             "id": generate_id(sender),
             "type": "Create",
             "actor": sender.id,
+            "published": date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "to": [recipient.id],
+            "cc": [],
             "object": object_activity
         },
         sender=sender,
@@ -114,24 +129,60 @@ def post_note(
         sender: Actor,
         recipient: Actor,
         private_key_path: str,
-        date: datetime.datetime = None
+        date: datetime.datetime = None,
+        summary: str = None,
+        in_reply_to: str = None,
+        in_reply_to_atom_uri: str = None,
+        sensitive: bool = False,
 ):
+    id_convo = uuid4().fields[0]
+    id_note = generate_id(sender, id_convo)
     date = date or datetime.datetime.now()
-    return post_create_activity(
+    return post_activity_create(
         object_activity={
-            "id": generate_id(sender),
+            "id": id_note,
             "type": "Note",
+            "summary": summary,
+            "inReplyTo": in_reply_to,
             "published": date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "url": id_note,
             "attributedTo": sender.id,
+            "to": [recipient.id],
+            "cc": [],
+            "sensitive": sensitive,
+            "atomUri": id_note,
+            "inReplyToAtomUri": in_reply_to_atom_uri,
+            "conversation": f"tag:{sender.instance},{date.strftime('%Y-%m-%d')}:"
+                            f"objectId={id_convo}:"
+                            f"objectType=Conversation",
             "content": content,
-            "to": recipient.id,
+            "contentMap": {},
+            "attachment": [],
+            "tag": [
+                {
+                    "type": "Mention",
+                    "href": recipient.id,
+                    "name": recipient.full_username
+                }
+            ],
+            "replies": {
+                "id": id_note,
+                "type": "Collection",
+                "first": {
+                    "type": "CollectionPage",
+                    "next": id_note,
+                    "partOf": id_note,
+                    "items": []
+                }
+            }
         },
         sender=sender,
         recipient=recipient,
         private_key_path=private_key_path,
-        date=date
+        date=date,
     )
 
 
-def generate_id(actor: Actor):
-    return f"{actor.id}/{uuid4()}"
+def generate_id(actor: Actor, id: int = None):
+    id = id or uuid4().fields[0]
+    return f"{actor.id}/{id}"
