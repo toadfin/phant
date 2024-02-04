@@ -3,15 +3,14 @@ import datetime
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 from uuid import uuid4
 
-import Crypto.Hash
+import Crypto.Hash.SHA256
 import Crypto.Signature.pkcs1_15
 import requests
 from Crypto.PublicKey import RSA
 
-from .actor import Actor
+from common import Actor, Instance
 
 
 def make_keys(
@@ -31,67 +30,93 @@ def make_keys(
         fp.write(public_key)
 
 
-def register(
-        username: str,
-        instance_url: str,
-        public_key_path: str = None,
-        public_key_pem: str = None,
-):
-    if not ((public_key_pem is None) ^ (public_key_path is None)):
-        raise RuntimeError
-    if public_key_path is not None:
-        with open(public_key_path) as fp:
-            public_key = fp.read()
-    else:
-        public_key = public_key_pem
-    response = requests.post(f"{instance_url}/users/{username}", params={
-        "public_key": public_key
-    })
-    if response.status_code // 100 != 2:
-        raise RuntimeError(response.text)
-    else:
-        return response.json()
-
-
-def post_activity(
-        activity: dict[str, Any],
+def signed_request(
+        method: str,
+        endpoint: str,
         sender: Actor,
-        recipient: Actor,
-        private_key_path: str,
-        date: datetime.datetime,
+        content: str = "",
+        date: datetime.datetime = None,
+        **kwargs
 ):
-    with open(private_key_path) as fp:
-        private_key = RSA.import_key(fp.read())
-    content = json.dumps(activity)
+    if sender.private_key is None:
+        raise ValueError(f"No available private key for actor {sender.full_username}")
+    url = Instance(endpoint)
+    date = date or datetime.datetime.utcnow()
+    if "headers" in kwargs:
+        headers = kwargs["headers"]
+        del kwargs["headers"]
+    else:
+        headers = {}
     hasher = Crypto.Hash.SHA256.new()
     hasher.update(content.encode("ascii"))
     digest = "sha-256=" + base64.b64encode(hasher.digest()).decode("ascii")
-    inbox = urlparse(recipient.inbox)
     date_str = date.strftime("%a, %d %b %Y %H:%M:%S GMT")
-    signed_string = f"(request-target): post {inbox.path}\n" \
+    signed_string = f"(request-target): {method.lower()} {url.path}\n" \
                     f"digest: {digest}\n" \
-                    f"host: {inbox.hostname}\n" \
+                    f"host: {url.hostname}\n" \
                     f"date: {date_str}"
-    signer = Crypto.Signature.pkcs1_15.new(private_key)
+    signer = Crypto.Signature.pkcs1_15.new(sender.private_key)
     hasher = Crypto.Hash.SHA256.new()
     hasher.update(signed_string.encode())
     signature = base64.b64encode(signer.sign(hasher)).decode("ascii")
     signature_header = f'keyId="{sender.public_key_id}",' \
                        f'headers="(request-target) digest host date",' \
                        f'signature="{signature}"'
-    return requests.post(recipient.inbox, data=content, headers={
-        'Digest': digest,
-        'Host': inbox.hostname,
-        'Date': date_str,
-        'Signature': signature_header
-    })
+    return requests.request(method, endpoint, data=content, headers=dict(
+        headers,
+        Digest=digest,
+        Host=url.hostname,
+        Date=date_str,
+        Signature=signature_header
+    ), **kwargs)
+
+
+def register(actor: Actor) -> bool:
+    return requests.post(
+        f"{actor.instance}/users/{actor.username}",
+        actor.public_key_pem,
+    ).status_code // 100 == 2
+
+
+def get_inbox(actor: Actor) -> list[dict[str, Any]]:
+    response = signed_request(
+        method="GET",
+        endpoint=actor.client_inbox,
+        content="",
+        sender=actor
+    )
+    if response.status_code != 200:
+        raise RuntimeError(response.text, response.status_code)
+    else:
+        return response.json()
+
+
+def wait_inbox(actor: Actor):
+    inbox = ()
+    while len(inbox) == 0:
+        inbox = get_inbox(actor)
+    return inbox
+
+
+def post_activity(
+        activity: dict[str, Any],
+        sender: Actor,
+        recipient: Actor,
+        date: datetime.datetime = None,
+):
+    return signed_request(
+        method="POST",
+        endpoint=recipient.inbox,
+        content=json.dumps(activity),
+        sender=sender,
+        date=date,
+    ).status_code // 100 == 2
 
 
 def post_activity_create(
         object_activity: dict[str, Any],
         sender: Actor,
         recipient: Actor,
-        private_key_path: str,
         date: datetime.datetime = None
 ):
     date = date or datetime.datetime.now()
@@ -119,7 +144,6 @@ def post_activity_create(
         },
         sender=sender,
         recipient=recipient,
-        private_key_path=private_key_path,
         date=date,
     )
 
@@ -128,7 +152,6 @@ def post_note(
         content: str,
         sender: Actor,
         recipient: Actor,
-        private_key_path: str,
         date: datetime.datetime = None,
         summary: str = None,
         in_reply_to: str = None,
@@ -178,7 +201,6 @@ def post_note(
         },
         sender=sender,
         recipient=recipient,
-        private_key_path=private_key_path,
         date=date,
     )
 
