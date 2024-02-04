@@ -80,7 +80,7 @@ class Actor:
             f"{instance}/users/{username}/inbox",
             private_key,
             id=id,
-            inbox=f"{instance}/inbox",
+            inbox=f"{instance}/users/{username}/inbox",
             publicKey={"id": id, "publicKeyPem": public_key_pem}
         )
 

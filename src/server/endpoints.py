@@ -1,10 +1,10 @@
 import json
 from collections import defaultdict
 from threading import Lock
+from urllib.parse import urlparse
 
 from flask import request
 
-from common import Actor
 from .wrapper import endpoint, instance
 
 public_keys = {}
@@ -57,7 +57,7 @@ def get_user(user: str):
     else:
         return_json = False
     id = f"{instance}/users/{user}"
-    inbox = f"{instance}/inbox"
+    inbox = f"{instance}/users/{user}/inbox"
     if return_json:
         return {
             "@context": [
@@ -109,8 +109,8 @@ def inbox_get(user: str):
     return list(inbox)
 
 
-@endpoint("/inbox", methods=("POST",), signed=True)
-def inbox_post():
+@endpoint("/users/<user>/inbox", methods=("POST",), signed=True)
+def inbox_post(user: str):
     if request.is_json:
         activity = request.json
     else:
@@ -124,5 +124,7 @@ def inbox_post():
         return "Invalid type for field: to", 409
     with inbox_lock:
         for recipient in recipients:
-            actor = Actor.url(recipient)
-            global_inbox[actor.username].append(activity)
+            recipient_user = urlparse(recipient).path.split("/")[2]
+            if recipient_user != user:
+                return f"Invalid recipient in field to: {recipient_user}", 409
+            global_inbox[user].append(activity)

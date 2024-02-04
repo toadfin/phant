@@ -104,13 +104,14 @@ def post_activity(
         recipient: Actor,
         date: datetime.datetime = None,
 ):
-    return signed_request(
+    response = signed_request(
         method="POST",
         endpoint=recipient.inbox,
         content=json.dumps(activity),
         sender=sender,
         date=date,
-    ).status_code // 100 == 2
+    )
+    return response.status_code // 100 == 2
 
 
 def post_activity_create(
