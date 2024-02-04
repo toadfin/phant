@@ -26,6 +26,7 @@ def endpoint(
     def outer(callback):
         def wrapper(**kwargs):
             nonlocal url, methods
+            logger.info(f"{request.method} {request.path}, KWARGS: {kwargs}")
             if signed:
                 error = check_signature()
                 if error is not None:
@@ -36,7 +37,6 @@ def endpoint(
                     return f"Missing parameter '{name}'.", 422
                 elif not isinstance(kwargs[name], param.annotation):
                     return f"Parameter '{name}' should be of type {param.annotation}.", 422
-            logger.info(f"{request.method} {request.path}, KWARGS: {kwargs}")
             response = callback(**kwargs)
             if response is None:
                 response = ""
