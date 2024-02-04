@@ -71,11 +71,13 @@ def signed_request(
     ), **kwargs)
 
 
-def register(actor: Actor) -> bool:
-    return requests.post(
+def register(actor: Actor):
+    response = requests.post(
         f"{actor.instance}/users/{actor.username}",
         actor.public_key_pem,
-    ).status_code // 100 == 2
+    )
+    if response.status_code // 100 != 2:
+        raise RuntimeError(response.text, response.status_code)
 
 
 def get_inbox(actor: Actor) -> list[dict[str, Any]]:
