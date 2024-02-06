@@ -2,11 +2,12 @@ import logging
 
 from flask import Flask
 
-from server import wrap_app
+from environ import Environ
+from phant import wrap_flask_app
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
-wrap_app(app)
+wrap_flask_app(Environ.INSTANCE, app)
 
 
 if __name__ == "__main__":

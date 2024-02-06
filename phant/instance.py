@@ -13,7 +13,7 @@ class Instance:
                 parts = parsed.path.split("/")
                 sub = parts[0].split(":")
                 self.hostname = sub[0]
-                self.port = sub[1] if len(sub) > 1 else None
+                self.port = int(sub[1]) if len(sub) > 1 else None
                 self.path = "/" + "/".join(parts[1:])
             else:
                 self.hostname = parsed.scheme
@@ -33,12 +33,13 @@ class Instance:
             self.hostname = parsed.hostname
             self.port = parsed.port
             self.path = parsed.path or "/"
+        if self.port is None:
+            self.url = f"{self.scheme}://{self.hostname}"
+        else:
+            self.url = f"{self.scheme}://{self.hostname}:{self.port}"
 
     def __str__(self):
-        if self.port is None:
-            return f"{self.scheme}://{self.hostname}"
-        else:
-            return f"{self.scheme}://{self.hostname}:{self.port}"
+        return self.url
 
     def __eq__(self, other: 'Instance'):
         return all([
@@ -48,4 +49,4 @@ class Instance:
         ])
 
     def __repr__(self):
-        return f"<URL {self}>"
+        return f"<{self.__class__.__name__} {self}>"

@@ -1,96 +1,38 @@
-import base64
 import datetime
 import json
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import Crypto.Hash.SHA256
-import Crypto.Signature.pkcs1_15
 import requests
-from Crypto.PublicKey import RSA
 
-from common import Actor, Instance
-
-
-def make_keys(
-        private_key_path: str,
-        public_key_path: str
-):
-    private_key_path = Path(private_key_path)
-    public_key_path = Path(public_key_path)
-    if private_key_path.exists() or public_key_path.exists():
-        raise FileExistsError
-    key_pair = RSA.generate(3072)
-    private_key = key_pair.export_key().decode("ascii")
-    with open(private_key_path, "w") as fp:
-        fp.write(private_key)
-    public_key = key_pair.public_key().export_key().decode("ascii")
-    with open(public_key_path, "w") as fp:
-        fp.write(public_key)
-
-
-def signed_request(
-        method: str,
-        endpoint: str,
-        sender: Actor,
-        content: str = "",
-        date: datetime.datetime = None,
-        **kwargs
-):
-    if sender.private_key is None:
-        raise ValueError(f"No available private key for actor {sender.full_username}")
-    url = Instance(endpoint)
-    date = date or datetime.datetime.utcnow()
-    if "headers" in kwargs:
-        headers = kwargs["headers"]
-        del kwargs["headers"]
-    else:
-        headers = {}
-    hasher = Crypto.Hash.SHA256.new()
-    hasher.update(content.encode("ascii"))
-    digest = "sha-256=" + base64.b64encode(hasher.digest()).decode("ascii")
-    date_str = date.strftime("%a, %d %b %Y %H:%M:%S GMT")
-    signed_string = f"(request-target): {method.lower()} {url.path}\n" \
-                    f"digest: {digest}\n" \
-                    f"host: {url.hostname}\n" \
-                    f"date: {date_str}"
-    signer = Crypto.Signature.pkcs1_15.new(sender.private_key)
-    hasher = Crypto.Hash.SHA256.new()
-    hasher.update(signed_string.encode())
-    signature = base64.b64encode(signer.sign(hasher)).decode("ascii")
-    signature_header = f'keyId="{sender.public_key_id}",' \
-                       f'headers="(request-target) digest host date",' \
-                       f'signature="{signature}"'
-    return requests.request(method, endpoint, data=content, headers=dict(
-        headers,
-        Digest=digest,
-        Host=url.hostname,
-        Date=date_str,
-        Signature=signature_header
-    ), **kwargs)
+from .actor import Actor
+from .auth import signed_request, verify_request
+from .datatypes import Mail
 
 
 def register(actor: Actor):
-    response = requests.post(
-        f"{actor.instance}/users/{actor.username}",
-        actor.public_key_pem,
-    )
+    response = requests.post(actor.id, actor.public_key.export_key())
     if response.status_code // 100 != 2:
-        raise RuntimeError(response.text, response.status_code)
+        raise RuntimeError("Unable to register actor.", actor, response)
+    registered = Actor.url(actor.id)
+    registered.private_key = actor.private_key
+    return registered
 
 
 def get_inbox(actor: Actor) -> list[dict[str, Any]]:
     response = signed_request(
         method="GET",
-        endpoint=actor.client_inbox,
-        content="",
+        endpoint=actor.inbox,
         sender=actor
     )
-    if response.status_code != 200:
-        raise RuntimeError(response.text, response.status_code)
-    else:
-        return response.json()
+    if response.status_code // 100 != 2:
+        raise RuntimeError("Unable to get inbox.", actor, response)
+    valid_mails = []
+    for mail in [Mail(**item) for item in response.json()]:
+        error = verify_request(actor.instance, mail)
+        if error is None:
+            valid_mails.append(mail.content)
+    return valid_mails
 
 
 def wait_inbox(actor: Actor):
@@ -113,7 +55,8 @@ def post_activity(
         sender=sender,
         date=date,
     )
-    return response.status_code // 100 == 2
+    if response.status_code // 100 != 2:
+        raise RuntimeError("Unable to post activity.", response)
 
 
 def post_activity_create(

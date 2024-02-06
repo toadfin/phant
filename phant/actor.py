@@ -1,9 +1,7 @@
 import requests
-from Crypto.PublicKey import RSA
-from Crypto.PublicKey.RSA import RsaKey
 
+from .keys import load_key, load_key_pem, import_key
 from .instance import Instance
-from environ import Environ
 
 
 class Actor:
@@ -16,21 +14,10 @@ class Actor:
         if response.status_code // 100 != 2:
             raise FileNotFoundError(response)
         response = response.json()
-        instance = Instance(response["id"])
-        instance.path = "/"
-        user = response["preferredUsername"]
-        if private_key_path is not None:
-            with open(private_key_path) as fp:
-                private_key = RSA.import_key(fp.read())
-            client_inbox = f"{instance}/users/{user}/inbox"
-        else:
-            private_key = None
-            client_inbox = None
         return Actor(
-            user,
-            instance,
-            client_inbox,
-            private_key,
+            response["preferredUsername"],
+            Instance(response["id"]),
+            private_key_path,
             **response
         )
 
@@ -40,7 +27,7 @@ class Actor:
             instance: str = None,
             private_key_path: str = None,
     ):
-        username, instance = parse_username(username, instance)
+        username, instance = _parse_username(username, instance)
         response = requests.get(
             f"{instance}/.well-known/webfinger",
             params={"resource": f"acct:{username}@{instance.hostname}"}
@@ -62,34 +49,22 @@ class Actor:
             private_key_path: str = None,
             public_key_path: str = None,
     ):
-        username, instance = parse_username(username, instance)
-        id = f"{instance}/users/{username}"
-        if private_key_path is not None:
-            with open(private_key_path) as fp:
-                private_key = RSA.import_key(fp.read())
-        else:
-            private_key = None
-        if public_key_path is not None:
-            with open(public_key_path) as fp:
-                public_key_pem = fp.read()
-        else:
-            public_key_pem = None
+        username, instance = _parse_username(username, instance)
+        actor_url = f"{instance}/users/{username}"
         return Actor(
             username,
             instance,
-            f"{instance}/users/{username}/inbox",
-            private_key,
-            id=id,
-            inbox=f"{instance}/users/{username}/inbox",
-            publicKey={"id": id, "publicKeyPem": public_key_pem}
+            private_key_path,
+            id=actor_url,
+            inbox=f"{actor_url}/inbox",
+            publicKey={"id": actor_url, "publicKeyPem": load_key_pem(public_key_path)}
         )
 
     def __init__(
             self,
             username: str,
             instance: Instance,
-            client_inbox: str = None,
-            private_key: RsaKey = None,
+            private_key_path: str = None,
             /, *,
             id: str = None,
             inbox: str = None,
@@ -100,21 +75,20 @@ class Actor:
         self.username = username
         self.instance = instance
         self.full_username = f"@{username}@{instance.hostname}"
-        self.client_inbox = client_inbox
-        self.private_key = private_key
+        self.private_key = load_key(private_key_path)
         self.id = id
         self.inbox = inbox
         self.public_key_id = publicKey.get("id")
-        self.public_key_pem = publicKey.get("publicKeyPem")
+        self.public_key = import_key(publicKey.get("publicKeyPem"))
 
     def __repr__(self):
         return f"<Actor {self.full_username}>"
 
 
-def parse_username(
+def _parse_username(
         username: str,
         instance: str = None,
-        default_instance: str = Environ.INSTANCE,
+        default_instance: str = None,
         default_scheme: str = "https",
 ):
     parts = username.split("@")
