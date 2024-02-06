@@ -49,7 +49,7 @@ def verify_request(instance: Instance, request: Request):
     if request.headers["Host"] != instance.hostname:
         return f"Invalid Host Header: {request.headers['Host']} should be {instance.hostname}", 401
     if not request.headers["Digest"].startswith("sha-256="):
-        return "Digest Header doesn't use SHA256", 401
+        return f"Digest Header uses {request.headers['Digest'].split('=')[0]} instead of sha-256", 401
     digest = _do_digest(request.data.decode())
     if request.headers["Digest"] != digest:
         return f"Invalid Header: Digest", 401

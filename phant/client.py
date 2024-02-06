@@ -10,13 +10,18 @@ from .auth import signed_request, verify_request
 from .datatypes import Mail
 
 
-def register(actor: Actor):
+def register(
+        username: str,
+        instance: str = None,
+        *,
+        public_key_path: str,
+        private_key_path: str
+):
+    actor = Actor.phant(username, instance, public_key_path=public_key_path)
     response = requests.post(actor.id, actor.public_key.export_key())
     if response.status_code // 100 != 2:
         raise RuntimeError("Unable to register actor.", actor, response)
-    registered = Actor.url(actor.id)
-    registered.private_key = actor.private_key
-    return registered
+    return Actor.url(actor.id, private_key_path=private_key_path)
 
 
 def get_inbox(actor: Actor) -> list[dict[str, Any]]:
