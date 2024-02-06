@@ -61,7 +61,7 @@ def verify_request(instance: Instance, request: Request):
     for field in request.headers["Signature"].split(","):
         item = field.split("=")
         if len(item) != 2 or len(item[1]) < 2 or not item[1].startswith('"') or not item[1].endswith('"'):
-            return f"Invalid field in Signature Header: {field}", 401
+            return "Invalid field " + field + " - in Signature Header: " + request.headers["Signature"], 401
         signature_fields[item[0]] = item[1][1:-1]
     for field in ("keyId", "headers", "signature"):
         if field not in signature_fields:
