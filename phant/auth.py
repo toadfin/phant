@@ -48,10 +48,13 @@ def verify_request(instance: Instance, request: Request):
             return f"Missing Header: {header}", 401
     if request.headers["Host"] != instance.hostname:
         return f"Invalid Host Header: {request.headers['Host']} should be {instance.hostname}", 401
-    if not request.headers["Digest"].startswith("sha-256="):
-        return f"Digest Header uses {request.headers['Digest'].split('=')[0]} instead of sha-256", 401
+    parts = request.headers["Digest"].split('=', maxsplit=1)
+    if len(parts) != 2:
+        return f"Invalid Digest Header"
+    if parts[0].lower() != "sha-256":
+        return f"Digest Header uses {parts[0]} instead of sha-256", 401
     digest = _do_digest(request.data.decode())
-    if request.headers["Digest"] != digest:
+    if parts[1] != digest:
         return f"Invalid Header: Digest", 401
     signature_fields = {}
     for field in request.headers["Signature"].split(","):
@@ -67,7 +70,7 @@ def verify_request(instance: Instance, request: Request):
         if header == "(request-target)":
             signed_string.append(f"(request-target): {request.method.lower()} {request.path}")
         elif header == "digest":
-            signed_string.append(f"digest: {digest}")
+            signed_string.append(f"digest: {request.headers['Digest']}")
         elif header == "host":
             signed_string.append(f"host: {instance.hostname}")
         elif header == "date":
@@ -99,7 +102,7 @@ def _do_verify(value: str, signature: str, public_key: RsaKey):
 
 def _do_digest(value: str) -> str:
     hasher = _do_hash(value)
-    return "sha-256=" + base64.b64encode(hasher.digest()).decode()
+    return base64.b64encode(hasher.digest()).decode()
 
 
 def _do_hash(value: str):
