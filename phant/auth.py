@@ -21,8 +21,9 @@ def signed_request(
 ):
     url = Instance(endpoint)
     date = (date or datetime.datetime.utcnow()).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    digest = "sha-256=" + _do_digest(content)
     signed_string = f"(request-target): {method.lower()} {url.path}\n" \
-                    f"digest: {_do_digest(content)}\n" \
+                    f"digest: {digest}\n" \
                     f"host: {url.hostname}\n" \
                     f"date: {date}"
     signature_header = f'keyId="{sender.public_key_id}",' \
@@ -35,7 +36,7 @@ def signed_request(
         headers = {}
     return requests.request(method, endpoint, data=content, headers=dict(
         headers,
-        Digest=_do_digest(content),
+        Digest=digest,
         Host=url.hostname,
         Date=date,
         Signature=signature_header
