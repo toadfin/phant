@@ -7,6 +7,7 @@ class Request(Protocol):
     data: bytes
     method: str
     path: str
+    content_type: str
 
 
 class Mail:
@@ -15,14 +16,16 @@ class Mail:
             headers: dict[str, str],
             method: str,
             path: str,
+            content_type: str,
             data: bytes = None,
             data_array: list[int] = None,
     ):
-        self.data = data if data is not None else bytes(data_array)
         self._data_array = data_array
         self.headers = headers
         self.method = method
         self.path = path
+        self.content_type = content_type
+        self.data = data if data is not None else bytes(data_array)
 
     @property
     def data_array(self):
@@ -40,7 +43,8 @@ class Mail:
             "headers": self.headers,
             "method": self.method,
             "path": self.path,
-            "data_array": self.data_array
+            "data_array": self.data_array,
+            "content_type": self.content_type,
         }
 
     def __repr__(self):

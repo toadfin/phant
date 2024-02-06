@@ -76,6 +76,8 @@ def verify_request(instance: Instance, request: Request):
             signed_string.append(f"host: {instance.hostname}")
         elif header == "date":
             signed_string.append(f"date: {request.headers['Date']}")
+        elif header == "content-type":
+            signed_string.append(f"content-type: {request.content_type}")
         else:
             return f"Invalid header name in field headers of Signature header: {header}", 401
     signed_string = "\n".join(signed_string)

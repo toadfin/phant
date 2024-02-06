@@ -115,6 +115,7 @@ def inbox_post(user: str):
         path=request.path,
         data=request.data,
         headers=dict(request.headers),
+        content_type=request.content_type,
     ).to_dict()
     for recipient in recipients:
         recipient_user = urlparse(recipient).path.split("/")[2]
