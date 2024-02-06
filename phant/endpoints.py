@@ -129,5 +129,92 @@ def inbox_post(user: str):
         global_inbox[user].append(mail)
 
 
+@endpoint("robots.txt")
+def robots():
+    return """# See http://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: *
+Disallow: /media_proxy/
+Disallow: /interact/
+"""
+
+
+@endpoint(".well-known/nodeinfo")
+def node_info():
+    return {
+        "links": [
+            {
+                "rel": "http://nodeinfo.diaspora.software/ns/schema/2.0",
+                "href": f"{phant_instance[0]}/nodeinfo/2.0"
+            }
+        ]
+    }
+
+
+@endpoint("nodeinfo/2.0")
+def node_info():
+    return {
+        "version": "2.0",
+        "software": {
+            "name": "phant",
+            "version": "0.0.1"
+        },
+        "protocols": [
+            "activitypub"
+        ],
+        "services": {
+            "outbound": [],
+            "inbound": []
+        },
+        "openRegistrations": True,
+        "metadata": {
+            "nodeName": "Phant",
+            "nodeDescription": "The sound that phants make"
+        }
+    }
+
+
+@endpoint("/api/v1/instance")
+def mastodon_instance():
+    return {
+        "uri": phant_instance[0].hostname,
+        "title": "Phant",
+        "short_description": "The sound that phants make",
+        "description": "",
+        "version": "0.0.1",
+        "languages": [
+            "en", "it"
+        ],
+        "registrations": False,
+        "approval_required": False,
+        "invites_enabled": False,
+        "rules": [
+            {
+                "id": "1",
+                "text": "Phants never forget"
+            },
+            {
+                "id": "2",
+                "text": "Phants will always search for you"
+            },
+            {
+                "id": "3",
+                "text": "Phants won't stop"
+            },
+            {
+                "id": "4",
+                "text": "Phant is already behind you"
+            },
+            {
+                "id": "7",
+                "text": "You better not turn around"
+            }
+        ]
+    }
+
+
 def get_phant_id(user: str):
     return f"{phant_instance[0]}/users/{user}"
