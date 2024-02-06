@@ -81,7 +81,10 @@ def verify_request(instance: Instance, request: Request):
         else:
             return f"Invalid header name in field headers of Signature header: {header}", 401
     signed_string = "\n".join(signed_string)
-    actor = Actor.url(signature_fields["keyId"])
+    try:
+        actor = Actor.url(signature_fields["keyId"])
+    except FileNotFoundError:
+        return "Unable to find actor with keyId: " + signature_fields["keyId"], 401
     if not _do_verify(signed_string, signature_fields["signature"], actor.public_key):
         return "Invalid signature", 403
 
