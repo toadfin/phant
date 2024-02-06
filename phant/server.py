@@ -6,10 +6,11 @@ from uuid import uuid4
 
 from flask import Flask, request
 
-from .auth import verify_request
+from .auth import RequestsVerifier
 from .instance import Instance
 
 phant_instance: list[Instance] = []
+server_verifier = RequestsVerifier()
 logger = logging.getLogger("Server")
 endpoints: list[tuple[str, tuple[str], Callable]] = []
 
@@ -22,7 +23,7 @@ def endpoint(
     def decorator(callback):
         def wrapper(**kwargs):
             if signed:
-                error = verify_request(phant_instance[0], request)
+                error = server_verifier.verify(phant_instance[0], request)
                 if error is not None:
                     log(error[0])
                     return error

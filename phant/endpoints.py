@@ -2,12 +2,12 @@ import json
 from collections import defaultdict
 from urllib.parse import urlparse
 
+from Crypto.PublicKey import RSA
 from flask import request
 
+from .actor import Actor
 from .datatypes import Mail
-from .server import endpoint, phant_instance
-
-public_keys = {}
+from .server import endpoint, phant_instance, server_verifier
 
 global_inbox: dict[str, list[Mail]] = defaultdict(list)
 
@@ -21,26 +21,29 @@ def webfinger(resource: str):
     if len(parts) != 2:
         return "Invalid resource", 422
     user = parts[0]
+    id = get_phant_id(user)
     try:
-        _ = public_keys[user]
+        _ = server_verifier.get_key(id)
     except KeyError:
         return {}
-    return {
-        "subject": resource,
-        "links": [
-            {
-                "rel": "self",
-                "type": "application/activity+json",
-                "href": f"{phant_instance[0]}/users/{user}"
-            }
-        ]
-    }
+    else:
+        return {
+            "subject": resource,
+            "links": [
+                {
+                    "rel": "self",
+                    "type": "application/activity+json",
+                    "href": f"{phant_instance[0]}/users/{user}"
+                }
+            ]
+        }
 
 
 @endpoint('/users/<user>')
 def get_user(user: str):
+    id = get_phant_id(user)
     try:
-        public_key_pem = public_keys[user]
+        public_key = server_verifier.get_key(id)
     except KeyError:
         return "User Not Found", 404
     accept_parts = request.headers.get("Accept", "").split(";")
@@ -48,8 +51,7 @@ def get_user(user: str):
         return_json = "application/activity+json" in accept_parts[0].split(",")
     else:
         return_json = False
-    id = f"{phant_instance[0]}/users/{user}"
-    inbox = f"{phant_instance[0]}/users/{user}/inbox"
+    inbox = f"{id}/inbox"
     if return_json:
         return {
             "@context": [
@@ -63,31 +65,34 @@ def get_user(user: str):
             "publicKey": {
                 "id": id,
                 "owner": id,
-                "publicKeyPem": public_key_pem
+                "publicKeyPem": public_key.public_key().export_key().decode()
             }
         }
     else:
         return f"""<h1>{user}</h1>
         <b>Inbox:</b> {inbox}<br>
-        <b>Public Key:</b><br>{public_key_pem}"""
+        <b>Public Key:</b><br>{public_key}"""
 
 
 @endpoint('/users/<user>', methods=("POST",))
 def register_user(user: str):
-    public_key = request.data.decode("ascii")
+    id = get_phant_id(user)
+    public_key = RSA.import_key(request.data.decode())
     try:
-        old_public_key_pem = public_keys[user]
+        old_public_key_pem = server_verifier.get_key(id)
     except KeyError:
-        public_keys[user] = public_key
-        return True
+        server_verifier.set_key(id, public_key)
     else:
         if old_public_key_pem is None:
-            public_keys[user] = public_key
-            return True
+            server_verifier.set_key(id, public_key)
         elif old_public_key_pem != public_key:
             return "User Already Exists", 409
-        else:
-            return True
+
+
+@endpoint('/external_keys', methods=("POST",))
+def register_external_user():
+    actor = Actor.json(request.json)
+    server_verifier.set_key(actor.public_key_id, actor.public_key)
 
 
 @endpoint("/users/<user>/inbox", signed=True)
@@ -122,3 +127,7 @@ def inbox_post(user: str):
         if recipient_user != user:
             return f"Invalid recipient in field to: {recipient_user}", 409
         global_inbox[user].append(mail)
+
+
+def get_phant_id(user: str):
+    return f"{phant_instance[0]}/users/{user}"

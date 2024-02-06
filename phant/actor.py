@@ -1,3 +1,5 @@
+from typing import Any
+
 import requests
 
 from .keys import load_key, load_key_pem, import_key
@@ -6,6 +8,15 @@ from .instance import Instance
 
 class Actor:
     @staticmethod
+    def json(data: dict[str, Any], private_key_path: str = None):
+        return Actor(
+            data["preferredUsername"],
+            Instance(data["id"]),
+            private_key_path,
+            **data
+        )
+
+    @staticmethod
     def url(
             actor_url: str,
             private_key_path: str = None,
@@ -13,13 +24,7 @@ class Actor:
         response = requests.get(actor_url, headers={"Accept": "application/activity+json"})
         if response.status_code // 100 != 2:
             raise FileNotFoundError(response)
-        response = response.json()
-        return Actor(
-            response["preferredUsername"],
-            Instance(response["id"]),
-            private_key_path,
-            **response
-        )
+        return Actor.json(response.json(), private_key_path)
 
     @staticmethod
     def webfinger(
@@ -65,21 +70,19 @@ class Actor:
             username: str,
             instance: Instance,
             private_key_path: str = None,
-            /, *,
-            id: str = None,
-            inbox: str = None,
-            publicKey: dict[str, str] = None,
+            /,
             **kwargs
     ):
-        publicKey = publicKey or {}
+        self.json = kwargs
+        public_key = kwargs.get("publicKey", {})
         self.username = username
         self.instance = instance
         self.full_username = f"@{username}@{instance.hostname}"
         self.private_key = load_key(private_key_path)
-        self.id = id
-        self.inbox = inbox
-        self.public_key_id = publicKey.get("id")
-        self.public_key = import_key(publicKey.get("publicKeyPem"))
+        self.id = kwargs.get("id")
+        self.inbox = kwargs.get("inbox")
+        self.public_key_id = public_key.get("id")
+        self.public_key = import_key(public_key.get("publicKeyPem"))
 
     def __repr__(self):
         return f"<Actor {self.full_username}>"
