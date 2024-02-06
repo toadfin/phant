@@ -1,6 +1,5 @@
 import json
 from collections import defaultdict
-from threading import Lock
 from urllib.parse import urlparse
 
 from flask import request
@@ -9,10 +8,8 @@ from .datatypes import Mail
 from .server import endpoint, phant_instance
 
 public_keys = {}
-public_keys_lock = Lock()
 
 global_inbox: dict[str, list[Mail]] = defaultdict(list)
-inbox_lock = Lock()
 
 
 @endpoint("/.well-known/webfinger")
@@ -24,13 +21,10 @@ def webfinger(resource: str):
     if len(parts) != 2:
         return "Invalid resource", 422
     user = parts[0]
-    public_keys_lock.acquire()
     try:
         _ = public_keys[user]
     except KeyError:
         return {}
-    finally:
-        public_keys_lock.release()
     return {
         "subject": resource,
         "links": [
@@ -45,13 +39,10 @@ def webfinger(resource: str):
 
 @endpoint('/users/<user>')
 def get_user(user: str):
-    public_keys_lock.acquire()
     try:
         public_key_pem = public_keys[user]
     except KeyError:
         return "User Not Found", 404
-    finally:
-        public_keys_lock.release()
     accept_parts = request.headers.get("Accept", "").split(";")
     if len(accept_parts) > 0:
         return_json = "application/activity+json" in accept_parts[0].split(",")
@@ -84,7 +75,6 @@ def get_user(user: str):
 @endpoint('/users/<user>', methods=("POST",))
 def register_user(user: str):
     public_key = request.data.decode("ascii")
-    public_keys_lock.acquire()
     try:
         old_public_key_pem = public_keys[user]
     except KeyError:
@@ -98,15 +88,12 @@ def register_user(user: str):
             return "User Already Exists", 409
         else:
             return True
-    finally:
-        public_keys_lock.release()
 
 
 @endpoint("/users/<user>/inbox", signed=True)
 def inbox_get(user: str):
-    with inbox_lock:
-        inbox = tuple(global_inbox[user])
-        global_inbox[user].clear()
+    inbox = tuple(global_inbox[user])
+    global_inbox[user].clear()
     return list(inbox)
 
 
@@ -129,9 +116,8 @@ def inbox_post(user: str):
         data=request.data,
         headers=dict(request.headers),
     ).to_dict()
-    with inbox_lock:
-        for recipient in recipients:
-            recipient_user = urlparse(recipient).path.split("/")[2]
-            if recipient_user != user:
-                return f"Invalid recipient in field to: {recipient_user}", 409
-            global_inbox[user].append(mail)
+    for recipient in recipients:
+        recipient_user = urlparse(recipient).path.split("/")[2]
+        if recipient_user != user:
+            return f"Invalid recipient in field to: {recipient_user}", 409
+        global_inbox[user].append(mail)
